@@ -10,6 +10,65 @@
 
 package Net::IPA;
 
+our $VERSION = '1.0';
+
+=head1 NAME
+
+Net::IPA.pm -- Perl 5 interface of the (Free)IPA JSON-RPC API
+
+=head1 SYNOPSIS
+
+  use Net::IPA;
+
+  my $ipa = new Net::IPA(
+    hostname => 'ipa.server.com',
+    cacert => '/etc/ipa/ca.cert',
+  );
+
+  # (a) Login can be done via Kerberos
+  $ipa->login();
+
+  # (b) Login can be done via Kerberos (creating the ticket)
+  $ipa->login(
+    username => 'admin',
+    keytab => '/etc/ipa/admin.keytab'
+  );
+
+  # (c) Login can be done using username and password
+  $ipa->login(
+    username => 'admin',
+    password => 'admin-password'
+  );
+
+  # Control error
+  die $ipa->error if($ipa->error);
+
+  # $user_show is of the type Net::IPA::Response
+  my $user_show = $ipa->user_show('username');
+  die 'Error: ' . $user_show->error_string() if($user_show->is_error);
+
+  # Requests can be batched
+  use Net::IPA::Methods;
+  my @users_show = $ipa->batch(
+    Net::IPA::Methods::user_show('username1'),
+    Net::IPA::Methods::user_show('username2'),
+    Net::IPA::Methods::user_show('username3'),
+  );
+
+  foreach my $user_show (@users_show){
+    # $user_show is of the type Net::IPA::Response
+    if($user_show->is_error){
+        print 'Error: ' . $user_show->error_string() . "\n";
+        next;
+    }
+
+    # Do something
+  }
+
+For methods look at the L<Net::IPA::Methods> module.
+
+=cut
+
 use strict;
 use Net::IPA::Methods;
 use Net::IPA::Response;
@@ -37,20 +96,6 @@ use constant {
 	ROUTE_JSON => "/session/json",
 	IPA_CLIENT_VERSION => "2.156",
 };
-
-sub error_string
-{
-	my ($self, $response) = @_;
-	$response = $self if(1 == scalar @_);
-	return $response->error_string();
-}
-
-sub is_error
-{
-	my ($self, $response) = @_;
-	$response = $self if(1 == scalar @_);
-	return $response->is_error();
-}
 
 sub new
 {
