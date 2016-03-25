@@ -83,7 +83,7 @@ use HTTP::Cookies;
 use HTTP::Request;
 use HTTP::Headers;
 use File::Spec::Functions qw(catdir);
-use Authen::Krb5::Easy qw(kinit kerror); # https://github.com/nickcis/perl-Authen-Krb5-Easy
+use Authen::Krb5::Easy qw(kcheck kerror); # https://github.com/nickcis/perl-Authen-Krb5-Easy
 
 use constant {
 	AGENT => 'Perl / IPA',
@@ -95,6 +95,7 @@ use constant {
 	ROUTE_LOGIN_PASSWORD => "/session/login_password",
 	ROUTE_JSON => "/session/json",
 	IPA_CLIENT_VERSION => "2.156",
+	COOKIE_NAME => 'ipa_session',
 };
 
 sub new
@@ -109,11 +110,15 @@ sub new
 		_basepage => $args{basepage} || BASEPAGE,
 		_url_template => $args{url_template} || URL_TEMPLATE,
 		_agent => $args{agent} || AGENT,
-		_ua => $args{_ua} || undef,
+		_ua => $args{ua} || undef,
+		_cookie_name => $args{cookie_name} || COOKIE_NAME,
 		_cookie_jar => $args{cookie_jar} || undef,
 		_debug => $args{debug} || undef,
 		_error => undef,
 		_version => $args{version} || IPA_CLIENT_VERSION,
+		_reconnect => exists $args{reconnect} ? $args{reconnect} : 1,
+		_login_args => {},
+		_expire_time => 0,
 	};
 
 	bless ($self, $class);
@@ -196,6 +201,7 @@ sub _build_url
 sub login
 {
 	my ($self, %args) = @_;
+	$self->{_login_args} = \%args if($self->{_reconnect});
 	my $http_headers = $self->{_ua}->default_headers()->clone;
 	my $url;
 	my $data = undef;
@@ -210,7 +216,7 @@ sub login
 		$data = "user=". $args{username} . "&password=" . $args{password};
 	}else{
 		if($args{keytab} && $args{username}) {
-			unless(kinit($args{keytab}, $args{username})){
+			unless(kcheck($args{keytab}, $args{username})){
 				$self->{_error} = kerror();
 				return -1;
 			} 
@@ -226,7 +232,19 @@ sub login
 		return 0;
 	}
 
+	$self->_scan_cookies();
+
 	return 1;
+}
+
+sub _scan_cookies
+{
+	my ($self) = @_;
+	$self->{_cookie_jar}->scan(sub {
+		my ($version, $key, $val, $path, $domain, $port, $path_spec, $secure, $expires, $discard, $hash) = @_;
+		return unless($key eq $self->{_cookie_name});
+		$self->{_expire_time} = $expires;
+	});
 }
 
 #** Check current error status.
@@ -266,6 +284,7 @@ sub _request
 	my ($self, $_options) = @_;
 
 	$self->{_error} = undef;
+	$self->login(%{$self->{_login_args}}) if($self->{_reconnect} && time() > $self->{_expire_time});
 
 	my $url = $self->_build_url(ROUTE_JSON);
 	my %options = %$_options;
@@ -284,6 +303,8 @@ sub _request
 	$self->_debug($data);
 	$self->_debug($response->decoded_content);
 
+	$self->_scan_cookies();
+
 	return new Net::IPA::Response({
 		error => {
 			code => -1,
@@ -293,7 +314,6 @@ sub _request
 	}) unless($response->is_success);
 	return new Net::IPA::Response(from_json($response->decoded_content));
 }
-
 
 #** AUTOLOAD is used to implement the methods of Net::IPA::Methods.
 #   This allows the programmer to call:
