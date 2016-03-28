@@ -88,7 +88,11 @@ sub AUTOLOAD
 	my $sub = $AUTOLOAD;
 	(my $name = $sub) =~ s/.*:://;
 
-	return $self->{result}->{$name} if(ref($self->{result}) eq 'HASH');
+	if(ref($self->{result}) eq 'HASH'){
+		my $value = $self->{result}->{$name};
+		return  ref($value) eq 'ARRAY' ? $value->[0] : $value;
+	};
+
 
 	return undef;
 }
