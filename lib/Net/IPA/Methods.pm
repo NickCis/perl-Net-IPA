@@ -416,5 +416,58 @@ sub dnsrecord_add_txt
 	$args{txt_part_data} = $data;
 	return dnsrecord_add($zone, $name, %args);
 }
+#
+#** Adds a forward dns zone
+# @param $name: nombre de la zona
+# @param $zone_forwarders : ip (string) or ref array of ip (string)
+# @param %args (
+#   idnsforwardpolicy: 'first' / 'only' / 'disabled'
+# )
+#*
+sub dnsforwardzone_add
+{
+	my ($name, $zone_forwarders, %args) = @_;
+	$args{idnsforwarders} = $zone_forwarders;
+	$args{idnsforwardpolicy} = 'first' unless(exists $args{idnsforwardingpolicy});
+	return {
+		method => 'dnsforwardzone_add',
+		params => [
+			[ $name ],
+			\%args
+		],
+	};
+}
+
+sub dnsforwardzone_del
+{
+	my ($name, %args) = @_;
+	return {
+		method => 'dnsforwardzone_del',
+		params => [
+			[ $name ],
+			\%args
+		]
+	};
+}
+
+sub dnsforwardzone_find
+{
+	my ($name, %args) = @_;
+	unless(%args){
+		%args = (
+			pkey_only => JSON::false,
+			sizelimit => 0,
+			raw => $USE_RAW,
+		);
+	}
+
+	return {
+		method => 'dnsforwardzone_find',
+		params => [
+			[ $name || '' ],
+			\%args
+		]
+	};
+}
 
 1;
