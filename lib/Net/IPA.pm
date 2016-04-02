@@ -49,13 +49,15 @@ Net::IPA.pm -- Perl 5 interface of the (Free)IPA JSON-RPC API
 
   # Requests can be batched
   use Net::IPA::Methods;
-  my @users_show = $ipa->batch(
+  my $batch_response = $ipa->batch(
     Net::IPA::Methods::user_show('username1'),
     Net::IPA::Methods::user_show('username2'),
     Net::IPA::Methods::user_show('username3'),
   );
 
-  foreach my $user_show (@users_show){
+  die 'Error: ' . $batch_response->error_string() if($batch_response->is_error);
+
+  foreach my $user_show ($batch_response->get()){
     # $user_show is of the type Net::IPA::Response
     if($user_show->is_error){
         print 'Error: ' . $user_show->error_string() . "\n";
@@ -87,6 +89,7 @@ use Authen::Krb5::Easy qw(kcheck kerror); # https://github.com/nickcis/perl-Auth
 
 use constant {
 	AGENT => 'Perl / IPA',
+	TIMEOUT => 180,
 	CACERT => "/etc/ipa/ca.crt",
 	URL_TEMPLATE => '{protocol}://{hostname}{endpoint}',
 	BASEPAGE => '/ipa',
@@ -110,6 +113,7 @@ sub new
 		_basepage => $args{basepage} || BASEPAGE,
 		_url_template => $args{url_template} || URL_TEMPLATE,
 		_agent => $args{agent} || AGENT,
+		_timeout => $args{timeout} || TIMEOUT,
 		_ua => $args{ua} || undef,
 		_cookie_name => $args{cookie_name} || COOKIE_NAME,
 		_cookie_jar => $args{cookie_jar} || undef,
@@ -152,6 +156,7 @@ sub _init_ua
 
 	$self->{_ua} = LWP::UserAgent->new(
 		agent => $self->{_agent},
+		timeout => $self->{_timeout},
 		cookie_jar => $self->{_cookie_jar},
 	);
 
@@ -266,13 +271,13 @@ sub error
 #*
 sub request
 {
-	my ($self, $method, $args, $_kargs) = @_;
+	my ($self, $method, $args, $_kargs, $response_class) = @_;
 
 	return $self->_request({
 		#id => 0,
 		method => $method,
 		params => [ $args, $_kargs ],
-	});
+	}, $response_class);
 }
 
 #** [private] Internal method for perfoming api requests.
@@ -281,7 +286,8 @@ sub request
 #*
 sub _request
 {
-	my ($self, $_options) = @_;
+	my ($self, $_options, $response_class) = @_;
+	$response_class = 'Net::IPA::Response' unless($response_class);
 
 	$self->{_error} = undef;
 	$self->login(%{$self->{_login_args}}) if($self->{_reconnect} && time() > $self->{_expire_time});
@@ -304,15 +310,11 @@ sub _request
 	$self->_debug($response->decoded_content);
 
 	$self->_scan_cookies();
+	no strict 'refs';
+	my $response = $response_class->from_http_response($response);
+	use strict 'refs';
 
-	return new Net::IPA::Response({
-		error => {
-			code => -1,
-			name => 'HttpError',
-			message => 'Code: ' . $response->code . ' (' . $response->message() . ')'
-		}
-	}) unless($response->is_success);
-	return new Net::IPA::Response(from_json($response->decoded_content));
+	return $response;
 }
 
 #** AUTOLOAD is used to implement the methods of Net::IPA::Methods.
@@ -347,21 +349,12 @@ sub AUTOLOAD
 sub batch
 {
 	my ($self, @batch) = @_;
-	my $response = $self->request(
+	return $self->request(
 		'batch',
 		\@batch,
-		{}
+		{},
+		'Net::IPA::Response::Batch',
 	);
-
-	my @ret;
-	if($response->is_error || ref($response->{result}->{results}) ne 'ARRAY'){
-		push @ret, $response;
-	}else{
-		foreach my $r (@{$response->{result}->{results}}){
-			push @ret, new Net::IPA::Response($r);
-		}
-	}
-	return wantarray ? @ret : \@ret;
 }
 
 1;

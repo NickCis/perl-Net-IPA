@@ -11,15 +11,37 @@
 package Net::IPA::Response;
 
 use strict;
+use JSON;
 
 use vars qw($AUTOLOAD);
 use constant {
+	InternalServerError => -500,
+	ReadTimeout => -520,
 	OptionError => 3005,
 	RequirementError => 3007,
 	NotFound => 4001,
 	DuplicateEntry => 4002,
 	EmptyModlist => 4202, # e.g: user_mod with no modifications to the db
 };
+
+#** Static method for creating a Response from an http response
+sub from_http_response
+{
+	my ($class, $response) = @_;
+	$response = $class if(1 == scalar @_);
+	return new Net::IPA::Response(from_json($response->decoded_content)) if($response->is_success);
+
+	my %error = (
+		code => 0-($response->code),
+		name => 'HttpError',
+		message => 'Code: ' . $response->code . ' (' . $response->message() . ')',
+	);
+
+	$error{code} = Net::IPA::Response::ReadTimeout if($response->code() == 500 && $response->message() =~ /read timeout/);
+	return new Net::IPA::Response({
+		error => \%error
+	});
+}
 
 sub new
 {
@@ -95,6 +117,39 @@ sub AUTOLOAD
 
 
 	return undef;
+}
+
+package Net::IPA::Response::Batch;
+use parent qw(Net::IPA::Response);
+use JSON;
+
+sub from_http_response
+{
+	my ($class, $response) = @_;
+	$response = $class if(1 == scalar @_);
+	return Net::IPA::Response::from_http_response($response) unless($response->is_success);
+
+	return new Net::IPA::Response::Batch(from_json($response->decoded_content));
+}
+
+sub count
+{
+	my ($self) = @_;
+	return scalar @{$self->{result}->{results}};
+}
+
+sub length
+{
+	my ($self) = @_;
+	return $self->count;
+}
+
+sub get
+{
+	my ($self, $i) = @_;
+	return map { new Net::IPA::Response($_) } @{$self->{result}->{results}} if(1 == scalar @_);
+	return undef if($self->count >= $i);
+	return new Net::IPA::Response($self->{result}->{results}->{$i});
 }
 
 1;
