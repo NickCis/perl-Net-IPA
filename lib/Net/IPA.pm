@@ -357,4 +357,6 @@ sub batch
 	);
 }
 
+sub DESTROY {}
+
 1;
