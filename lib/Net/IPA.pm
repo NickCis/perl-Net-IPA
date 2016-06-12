@@ -10,7 +10,7 @@
 
 package Net::IPA;
 
-our $VERSION = '1.1';
+our $VERSION = '1.2';
 
 =head1 NAME
 
@@ -85,7 +85,7 @@ use HTTP::Cookies;
 use HTTP::Request;
 use HTTP::Headers;
 use File::Spec::Functions qw(catdir);
-use Authen::Krb5::Easy qw(kcheck kerror); # https://github.com/nickcis/perl-Authen-Krb5-Easy
+use Authen::Krb5::Easy qw(kinit kerror); # https://github.com/nickcis/perl-Authen-Krb5-Easy
 
 use constant {
 	AGENT => 'Perl / IPA',
@@ -221,7 +221,7 @@ sub login
 		$data = "user=". $args{username} . "&password=" . $args{password};
 	}else{
 		if($args{keytab} && $args{username}) {
-			unless(kcheck($args{keytab}, $args{username})){
+			unless(kinit($args{keytab}, $args{username})){
 				$self->{_error} = kerror();
 				return -1;
 			} 
