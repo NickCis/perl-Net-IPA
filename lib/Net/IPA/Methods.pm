@@ -403,10 +403,10 @@ sub dnsrecord_add_ptr
 sub dnsrecord_add_srv
 {
 	my ($zone, $name, $priority, $weight, $port, $target, %args) = @_;
-	$args{ptr_part_priority} = $priority;
-	$args{ptr_part_weight} = $weight;
-	$args{ptr_part_port} = $port;
-	$args{ptr_part_target} = $target;
+	$args{srv_part_priority} = $priority;
+	$args{srv_part_weight} = $weight;
+	$args{srv_part_port} = $port;
+	$args{srv_part_target} = $target;
 	return dnsrecord_add($zone, $name, %args);
 }
 
