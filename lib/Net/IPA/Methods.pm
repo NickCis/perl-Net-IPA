@@ -310,6 +310,27 @@ sub dnszone_find
 	};
 }
 
+sub dnszone_show
+{
+	my ($name, %args) = @_;
+
+	unless(%args){
+		%args = (
+			pkey_only => JSON::false,
+			sizelimit => 0,
+			raw => $USE_RAW,
+		);
+	}
+
+	return {
+		method => 'dnszone_show',
+		params => [
+			[ $name || '' ],
+			\%args
+		]
+	};
+}
+
 #** Modifica valores de la zona
 # En params se puede especificar:
 #    - Dynamic update: 'idnsallowdynupdate' => 'TRUE' / 'FALSE'
@@ -354,6 +375,27 @@ sub dnsrecord_del
 	$args{del_all} = JSON::true unless(exists $args{del_all});
 	return {
 		method => 'dnsrecord_del',
+		params => [
+			[ $zone, $name ],
+			\%args
+		]
+	};
+}
+
+sub dnsrecord_find
+{
+	my ($zone, $name, %args) = @_;
+
+	unless(%args){
+		%args = (
+			pkey_only => JSON::false,
+			sizelimit => 0,
+			raw => $USE_RAW,
+		);
+	}
+
+	return {
+		method => 'dnsrecord_find',
 		params => [
 			[ $zone, $name ],
 			\%args
