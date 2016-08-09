@@ -382,6 +382,18 @@ sub dnsrecord_del
 	};
 }
 
+sub dnsrecord_mod
+{
+	my ($zone, $name, %args) = @_;
+	return {
+		method => 'dnsrecord_mod',
+		params => [
+			[ $zone, $name ],
+			\%args
+		]
+	};
+}
+
 sub dnsrecord_find
 {
 	my ($zone, $name, %args) = @_;
